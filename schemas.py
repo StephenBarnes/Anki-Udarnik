@@ -82,11 +82,11 @@ class _1For1(Schema):
     def card_rev(self, prob):
         reinforcing = random() < prob
         if reinforcing:
-            print(">> reinforcing! prob %s" % prob)
+            print(">> reinforcing! prob %.4f" % prob)
             show_reinforcement(*prm[0])
             return (1, prob * (1 - prob))
         else:
-            print(">> not reinforcing; prob %s" % prob)
+            print(">> not reinforcing; prob %.4f" % prob)
             return (0, prob * (1 - prob))
 
     def rollback(self):
@@ -114,11 +114,11 @@ class NForNSingles(Schema):
             self.idx += 1
             if self.idx == len(self.reinf_sequence):
                 self.idx = 0
-            print(">> reinforcing! prob %s, new state %s" % (prob, self.status_output()))
+            print(">> reinforcing! prob %.4f, new state %s" % (prob, self.status_output()))
             return (self.piece_per_reinf, (self.piece_per_reinf ** 2) * prob * (1 - prob))
             # Remember Variance(aX) = a^2 Variance(X), henc the **2 above
         else:
-            print(">> not reinforcing; prob %s, state %s" % (prob, self.status_output()))
+            print(">> not reinforcing; prob %.4f, state %s" % (prob, self.status_output()))
             return (0, (self.piece_per_reinf ** 2) * prob * (1 - prob))
 
     def rollback(self):
@@ -227,7 +227,7 @@ class CategoricalPieces(Schema):
         self.expected_piece_per_reinf = 0.
         for prob, num, rmx in self.piece_probs:
             self.expected_piece_per_reinf += prob * num
-        print("Expected pieces per reinforcement: %s" % self.expected_piece_per_reinf)
+        print("Expected pieces per reinforcement: %.4f" % self.expected_piece_per_reinf)
 
         # Compute variance, as Variance(X) = E[X^2] - E[X]^2
         # compute E[X^2] first
@@ -245,7 +245,8 @@ class CategoricalPieces(Schema):
         assert False
 
     def card_rev(self, prob):
-        print ("adjusted probability: %s / %s = %s" % (prob, self.expected_piece_per_reinf, prob / self.expected_piece_per_reinf))
+        print ("adjusted probability: %.4f / %.4f = %.4f" % (prob,
+            self.expected_piece_per_reinf, prob / self.expected_piece_per_reinf))
         prob /= self.expected_piece_per_reinf
         reinforcing = random() < prob
 
@@ -263,7 +264,7 @@ class CategoricalPieces(Schema):
             show_reinforcement(*rmx)
             return (num, variance)
         else:
-            print(">> not reinforcing; prob %s, state %s" % (prob, self.status_output()))
+            print(">> not reinforcing; prob %.4f, state %s" % (prob, self.status_output()))
             return (0, variance)
 
     def rollback(self):
@@ -330,7 +331,7 @@ class CategoricalPartials(Schema):
         self.expected_piece_per_reinf = 0.
         for prob, num in self.partials_probs:
             self.expected_piece_per_reinf += prob * num / self.partials_per_piece
-        print("Expected pieces per reinforcement: %s" % self.expected_piece_per_reinf)
+        print("Expected pieces per reinforcement: %.4f" % self.expected_piece_per_reinf)
 
         # Compute variance, as Variance(X) = E[X^2] - E[X]^2
         # compute E[X^2] first
@@ -348,7 +349,8 @@ class CategoricalPartials(Schema):
         assert False
 
     def card_rev(self, prob):
-        print ("adjusted probability: %s / %s = %s" % (prob, self.expected_piece_per_reinf, prob / self.expected_piece_per_reinf))
+        print ("adjusted probability: %.4f / %.4f = %.4f" % (prob,
+            self.expected_piece_per_reinf, prob / self.expected_piece_per_reinf))
         prob /= self.expected_piece_per_reinf
         reinforcing = random() < prob
 
@@ -361,21 +363,21 @@ class CategoricalPartials(Schema):
         variance += (1 - prob) * (expected_pieces ** 2)
 
         if reinforcing:
-            (prob, num) = self.sample_partials_probs()
+            (prob2, num) = self.sample_partials_probs()
             self.prev_partials_given = num
             self.partials_curr += num
             if self.partials_curr >= self.partials_per_piece:
                 num_pieces = self.partials_curr // self.partials_per_piece
                 self.partials_curr %= self.partials_per_piece
-                print(">> piece reinforcements given! prob %s, %d pieces now, %d partials given, %d partials left" % (prob, num_pieces, num, self.partials_curr))
+                print(">> piece reinforcements given! prob %.4f, %d pieces now, %d partials given, %d partials left" % (prob2, num_pieces, num, self.partials_curr))
                 show_reinforcement(*prm[num_pieces-1])
             else:
-                print(">> partial reinforcements given; prob %s, %d partials given, %d partials in total" % (prob, num, self.partials_curr))
+                print(">> partial reinforcements given; prob %.4f, %d partials given, %d partials in total" % (prob2, num, self.partials_curr))
                 show_reinforcement(*irm[num-1])
             return (num / self.partials_per_piece, variance)
         else:
             self.prev_partials_given = 0
-            print(">> not reinforcing; prob %s, %d partials in total" % (prob, self.partials_curr))
+            print(">> not reinforcing; prob %.4f, %d partials in total" % (prob, self.partials_curr))
             return (0, variance)
 
     def rollback(self):
