@@ -304,7 +304,8 @@ class Uniform1234(CategoricalPieces):
 schemas.append(Uniform1234())
 
 class CategoricalPartials(Schema):
-    """Abstract base class for schemas that given a number of partial pieces determined by a geometric distribution."""
+    """Abstract base class for schemas that give a number of partial pieces
+    determined by a categorical distribution."""
     name = None
     partials_probs = None
         # list of tuples (probability, number of partials)
@@ -404,6 +405,136 @@ class Geometric2Partials3(CategoricalPartials):
 schemas.append(Geometric2Partials3())
 
 
+class CategoricalPartialsNForN(Schema):
+    """Abstract base class for schemas that give a number of partial pieces
+    determined by a categorical distribution, with pieces given for varying
+    amounts of partials; e.g.: 9 partials for 1, then 9 partials for 1, then
+    another 9 partials for 2."""
+    name = None
+    partials_probs = None
+        # list of tuples (probability, number of partials)
+    partials_per_reinf = None
+        # how many partials constitutes one reinf
+    reinf_sequence = None
+        # sequence of pieces given when we have more than `partials_per_piece` partials
+
+    def __init__(self):
+        print("Initializing %s" % self.name)
+
+        self.state = 0 # index of next reward in the reinf_sequence
+        self.partials_curr = 0
+        self.prev_partials_given = 0
+        self.piece_per_reinf = sum(self.reinf_sequence) / len(self.reinf_sequence)
+            # mean number of pieces given per reinf
+        self.partials_per_piece = self.partials_per_reinf / self.piece_per_reinf
+
+        # normalize self.partials_probs
+        assert self.partials_probs
+        total_prob = 0.
+        for prob, num in self.partials_probs:
+            total_prob += prob
+        for i, (prob, num) in enumerate(self.partials_probs):
+            self.partials_probs[i] = (prob / total_prob, num)
+        print("Normalized partials_probs: %s" % [(prob, num) for (prob, num) in self.partials_probs])
+
+        # compute expected pieces per reinforcement
+        # ie expected number of pieces given, given that there's at least 1 piece given
+        self.expected_piece_per_reinf = 0.
+        for prob, num in self.partials_probs:
+            self.expected_piece_per_reinf += prob * num / self.partials_per_piece
+        print("Expected pieces per reinforcement: %.4f" % self.expected_piece_per_reinf)
+
+        # Compute variance, as Variance(X) = E[X^2] - E[X]^2
+        # compute E[X^2] first
+        #self.expectation_of_square = 0.
+        #for prob, num in self.partials_probs:
+        #    self.expectation_of_square += prob * (num**2)
+        #self.variance = self.expectation_of_square - (self.expected_piece_per_reinf ** 2)
+
+    def sample_partials_probs(self):
+        r = random()
+        for (prob, num) in self.partials_probs:
+            if prob >= r:
+                return (prob, num)
+            r -= prob
+        assert False
+
+    def card_rev(self, prob):
+        print ("adjusted probability: %.4f / %.4f = %.4f" % (prob,
+            self.expected_piece_per_reinf, prob / self.expected_piece_per_reinf))
+        prob /= self.expected_piece_per_reinf
+        reinforcing = random() < prob
+
+        # Compute variance
+        expected_pieces = prob * self.expected_piece_per_reinf
+        variance = 0.
+        for prob2, num in self.partials_probs: # sum up expected squared deviations from times we do reinforce
+            variance += prob2 * (((num / self.partials_per_piece) - expected_pieces) ** 2)
+        # add squared deviation from when we don't reinforce
+        variance += (1 - prob) * (expected_pieces ** 2)
+
+        if reinforcing:
+            # Give a number of partials, as per reinf_sequence
+            (prob2, num) = self.sample_partials_probs()
+            self.prev_partials_given = num
+            self.partials_curr += num
+            # If we've gotten a reinf...
+            if self.partials_curr >= self.partials_per_reinf:
+                num_reinfs = self.partials_curr // self.partials_per_reinf
+                self.partials_curr %= self.partials_per_reinf
+
+                #TODO add code to make it loop around the sequence properly
+                num_pieces = sum(self.reinf_sequence[self.state : self.state + num_reinfs])
+                    # E.g., if reinfs are [1, 1, 2], we're state 1, we give 2 reinfs, that means we give sum(reinf_sequence[1 : 3] == [1, 2]) pieces
+                self.state += num_reinfs
+                if self.state >= len(self.reinf_sequence):
+                    self.state %= len(self.reinf_sequence)
+                print(">> reinforcements given! state %d, prob %.4f, %d pieces given, %d reinfs given, %d partials given, %d partials left" % (self.state, prob, num_pieces, num_reinfs, num, self.partials_curr))
+                show_reinforcement(*prm[num_pieces-1])
+            else:
+                print(">> partial reinforcements given; state %d, prob %.4f, %d partials given, %d partials in total" % (self.state, prob, num, self.partials_curr))
+                show_reinforcement(*irm[num-1])
+            return (num / self.partials_per_piece, variance)
+        else:
+            self.prev_partials_given = 0
+            print(">> not reinforcing; state %d, prob %.4f, %d partials in total" % (self.state, prob, self.partials_curr))
+            return (0, variance)
+
+    def rollback(self):
+        if self.partials_curr == 0:
+            self.partials_curr = self.partials_per_reinf - 1
+            if self.state == 0:
+                self.state = len(self.reinf_sequence) - 1
+            else:
+                self.state -= 1
+        else:
+            self.partials_curr -= 1
+        print("%s rolled back, state %d, partials %d" % (self.name, self.state, self.partials_curr))
+
+    def status_output(self):
+        return "(categorical partials, %d partials currently, state %d)" % (self.partials_curr, self.state)
+
+def make_geometricApartialsBforC(geom_factor, partials_per_reinf_2, reinf_sequence_2):
+    class ManufacturedGeometric(CategoricalPartialsNForN):
+        name = "%.2f-Geometric partials, %d pieces for %d partials" % (geom_factor, sum(reinf_sequence_2), len(reinf_sequence_2) * partials_per_reinf_2)
+        partials_probs = [(geom_factor**(8 - i), i+1) for i in range(0, 8+1)]
+        partials_per_reinf = partials_per_reinf_2
+        reinf_sequence = reinf_sequence_2
+    schemas.append(ManufacturedGeometric())
+
+make_geometricApartialsBforC(2, 9, [1, 1, 2])
+make_geometricApartialsBforC(2, 3, [1, 1, 2, 1, 1, 2, 1, 1, 3])
+
+make_geometricApartialsBforC(1.5, 9, [1, 1, 2])
+make_geometricApartialsBforC(1.5, 3, [1, 1, 2, 1, 1, 2, 1, 1, 3])
+
+make_geometricApartialsBforC(3, 9, [1, 1, 2])
+make_geometricApartialsBforC(3, 3, [1, 1, 2, 1, 1, 2, 1, 1, 3])
+
+make_geometricApartialsBforC(4, 9, [1, 1, 2])
+make_geometricApartialsBforC(4, 3, [1, 1, 2, 1, 1, 2, 1, 1, 3])
+
+
+
+#TODO refactor code above
 # TODO implement more schemas
-# Eg, one that gives geometrically-distributed *partial* reinforcements
-# for instance, exponential-distribution schemas
