@@ -298,10 +298,15 @@ class Geometric23(CategoricalPieces):
     piece_probs = [((1.5)**(8 - i), i+1, prm[i]) for i in range(0, 8+1)]
 schemas.append(Geometric23())
 
-class Uniform1234(CategoricalPieces):
+class Uniform1to4(CategoricalPieces):
     name = "Uniform 1-4"
-    piece_probs = [(1, 1, prm[0]), (1, 2, prm[1]), (1, 3, prm[2]), (1, 4, prm[3])]
-schemas.append(Uniform1234())
+    piece_probs = [(1, i, prm[i-1]) for i in range(1, 4+1)]
+schemas.append(Uniform1to4())
+
+class Uniform1to9(CategoricalPieces):
+    name = "Uniform 1-9"
+    piece_probs = [(1, i, prm[i-1]) for i in range(1, 9+1)]
+schemas.append(Uniform1to9())
 
 class CategoricalPartials(Schema):
     """Abstract base class for schemas that give a number of partial pieces
