@@ -200,19 +200,19 @@ def reinforce_card_rating(self, ease):
     ekcal_given += ekcal_given_now
     expected_ekcal_given += piece_probability * ekcal_per_piece
     variance_ekcal_given += ekcal_variance_now
-    print("This rev     :           %.2f ekcal, %.2f expectation, %.2f variance" \
-            % (ekcal_given_now, expected_ekcal_given_now, ekcal_variance_now))
+    print("This rev     :           %6.2f ekcal, %6.2f expectation, %7.2f standard deviation" \
+            % (ekcal_given_now, expected_ekcal_given_now, ekcal_variance_now**.5))
     percentile = compute_percentile(ekcal_given, expected_ekcal_given, variance_ekcal_given)
     # Assumes that true distribution is normal, which will become true as we review more cards, by central limit theorem
-    print("This session : luck %d%%, %.2f ekcal, %.2f expectation, %.2f variance" \
-            % (percentile * 100, ekcal_given, expected_ekcal_given, variance_ekcal_given))
+    print("This session : luck %2d%%, %6.2f ekcal, %6.2f expectation, %7.2f standard deviation" \
+            % (percentile * 100, ekcal_given, expected_ekcal_given, variance_ekcal_given**.5))
 
     # Update daily totals
     given_daily, expected_daily, variance_daily = update_stored_dailies(ekcal_given_now, expected_ekcal_given_now, ekcal_variance_now)
-    percentile = compute_percentile(ekcal_given, expected_ekcal_given, variance_ekcal_given)
+    percentile = compute_percentile(given_daily, expected_daily, variance_daily)
     # Assumes that true distribution is normal, which will become true as we review more cards, by central limit theorem
-    print("Today        : luck %d%%, %.2f ekcal, %.2f expectation, %.2f variance" \
-            % (percentile *  100, given_daily, expected_daily, variance_daily))
+    print("Today        : luck %2d%%, %6.2f ekcal, %6.2f expectation, %7.2f standard deviation" \
+            % (percentile *  100, given_daily, expected_daily, variance_daily**.5))
 
     print("")
 
@@ -222,6 +222,10 @@ def reinforce_card_rating(self, ease):
     # and make an inherited class with the methods needed for storing updated daily values in the database
     # and give them a .luck() function
     # and give them a .print(show_luck=True) function; it uses a .name that's assigned on init
+    #     show their name as something like '%12s : ' % self.name, so they're right-aligned to the colons
+    # and if, say, number of samples is less than 25 for any distribution, we can print out its luck as "--%", ie refuse to show it
+    #     because the distribution will not be approximately normal
+#TODO add a NormalVariate for a mean of recent revs, to show luck during the past 20 or so revs
 
 
 def on_rollback():
