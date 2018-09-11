@@ -22,25 +22,129 @@ from .config import *
 import re
 import math
 
+import datetime
+
 def normal_cdf(x):
     "Cdf for standard normal; don't want to import all of scipy just for this."
     q = math.erf(x / math.sqrt(2.0))
     return (1.0 + q) / 2.0
 
 
+# using only synced conf, not local preferences
+default_store = {
+    "schema": 0,
+    "version": 0.3,
+    "effective calories per review": 0.8,
+    "protein free calories": 5.,
+    "difficult multiplier": .75,
+    "easy multiplier": 1.3,
+    "fail multiplier": 1,
+
+    "reinforcer": 0,
+    "reinforcer_name": "M&Ms",
+    "reinforcer_kcal_serving": 210,
+    "reinforcer_protein_serving": 2,
+    "reinforcer_pieces_serving": 49.196,
+    "ekcal_per_piece": (210 - 2 * 5) / 49.196,
+
+    "piece_prob": 0.8 / ((210 - 5 * 2) / 49.196),
+
+    "daily: day": 0.0,
+    "daily: ekcal given": 0.0,
+    "daily: expected ekcal given": 0.0,
+    "daily: variance ekcal given": 0.0,
+}
+
+def load_or_create_store():
+    """Load and/or create stored add-on preferences annd values"""
+    conf = mw.col.conf
+    default = default_store
+
+    if not 'udarnik' in conf:
+        # create initial configuration
+        conf['udarnik'] = default
+        mw.col.setMod()
+
+    elif conf['udarnik']['version'] < default['version']:
+        print("Updating synced config DB from earlier add-on release")
+        for key in list(default.keys()):
+            if key not in conf['udarnik']:
+                conf['udarnik'][key] = default[key]
+        conf['udarnik']['version'] = default_store['version']
+        # insert other update actions here:
+        mw.col.setMod()
+    
+    # TODO remove
+    #conf['udarnik'] = default
+    #mw.col.setMod()
+
+    return mw.col.conf['udarnik']
+
+
 # To load global config once the profile is loaded
 config = None
 def load_config_to_global():
     global config
-    config = load_config()
+    config = load_or_create_store()
+    day_changed_check()
+    mw.col.setMod()
 addHook("profileLoaded", load_config_to_global)
 
 
-# Initialize globals to track luck
-ekcal_given = 0
-expected_ekcal_given = 0
-variance_ekcal_given = 0
 
+
+# Tracking for this session:
+ekcal_given = 0.
+expected_ekcal_given = 0.
+variance_ekcal_given = 0.
+
+
+# What do we need to do for daily tracking?
+#   read the values so far today
+#   increment the values so far today on every rev
+#   check whether it's the next day yet, and if so, reset
+#   create database tables if they don't exist
+# using only synced conf, not local preferences
+
+
+def day_changed_check():
+    """Check whether the day has changed since the last time this function was
+    called, and if so, reset Udarnik's daily counts."""
+    now = datetime.datetime.now()
+    stored_day = config['daily: day']
+    if stored_day is None:
+        same_date = False
+    else:
+        stored_day = datetime.datetime.fromtimestamp(float(stored_day))
+
+        adjust_val = datetime.datetime.fromtimestamp(mw.col.crt)
+        now_adjusted = now - datetime.timedelta(hours = adjust_val.hour)
+        
+        same_date = now_adjusted.date() == stored_day.date()
+    if not same_date:
+        print(">>> Resetting stored Udarnik daily tallies...")
+        config['daily: day'] = now.timestamp()
+        config['daily: ekcal given'] = 0
+        config['daily: expected ekcal given'] = 0
+        config['daily: variance ekcal given'] = 0
+        # client responsible for calling mw.col.setMod()
+
+def update_stored_dailies(new_ekcal_given, new_expected_ekcal_given, new_variance_ekcal_given):
+    """Updates stored values of the daily tallies, to include one new
+    reinforcement given."""
+    # First, check whether day has changed, maybe zero out values
+    day_changed_check()
+    # Increment stored values
+    config['daily: ekcal given'] += new_ekcal_given
+    config['daily: expected ekcal given'] += new_expected_ekcal_given
+    config['daily: variance ekcal given'] += new_variance_ekcal_given
+    # Set database modified
+    mw.col.setMod()
+    return (config['daily: ekcal given'], config['daily: expected ekcal given'], config['daily: variance ekcal given'])
+
+def compute_percentile(given, expected, variance):
+    z = (given - expected) / (variance ** .5)
+    return normal_cdf(z)
 
 # Function to probabilistically reinforce card ratings
 def reinforce_card_rating(self, ease):
@@ -96,22 +200,28 @@ def reinforce_card_rating(self, ease):
     ekcal_given += ekcal_given_now
     expected_ekcal_given += piece_probability * ekcal_per_piece
     variance_ekcal_given += ekcal_variance_now
-    print("This rev: %.2f ekcal, %.2f expectation, %.2f variance" \
+    print("This rev     :           %.2f ekcal, %.2f expectation, %.2f variance" \
             % (ekcal_given_now, expected_ekcal_given_now, ekcal_variance_now))
-    print("In total: %.2f ekcal, %.2f expectation, %.2f variance" \
-            % (ekcal_given, expected_ekcal_given, variance_ekcal_given))
-    z = (ekcal_given - expected_ekcal_given) / (variance_ekcal_given ** .5)
-    print("Standard score: %.2f sigma" % z)
-    percentile = normal_cdf(z)
+    percentile = compute_percentile(ekcal_given, expected_ekcal_given, variance_ekcal_given)
     # Assumes that true distribution is normal, which will become true as we review more cards, by central limit theorem
-    print("Luck: %d%%" % (percentile * 100))
+    print("This session : luck %d%%, %.2f ekcal, %.2f expectation, %.2f variance" \
+            % (percentile * 100, ekcal_given, expected_ekcal_given, variance_ekcal_given))
+
+    # Update daily totals
+    given_daily, expected_daily, variance_daily = update_stored_dailies(ekcal_given_now, expected_ekcal_given_now, ekcal_variance_now)
+    percentile = compute_percentile(ekcal_given, expected_ekcal_given, variance_ekcal_given)
+    # Assumes that true distribution is normal, which will become true as we review more cards, by central limit theorem
+    print("Today        : luck %d%%, %.2f ekcal, %.2f expectation, %.2f variance" \
+            % (percentile *  100, given_daily, expected_daily, variance_daily))
+
     print("")
 
-
-    # TODO system to compute expected reinforcements, and actual, and luck this session
-    #global expected_reinforcements
-    #expected_reinforcements += reinforceProbability
-    #print("Expected number of reinforcements: %.1f" % expected_reinforcements)
+#TODO refactor this to use "normal variate" objects
+    # ie, objects with a (value, expected, variance)
+    # and give them a .update(other_variate) method, for daily += this_rev and session += this_rev
+    # and make an inherited class with the methods needed for storing updated daily values in the database
+    # and give them a .luck() function
+    # and give them a .print(show_luck=True) function; it uses a .name that's assigned on init
 
 
 def on_rollback():
