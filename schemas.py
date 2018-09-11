@@ -197,12 +197,14 @@ schemas.append(_42For27Singles())
 class _1For9Singles(NForNSingles):
     name = "1 for 9 singles"
     piece_per_reinf = 1. / 9.
-    reinf_sequence = [
-            irm[0], irm[0], irm[0],
-            irm[0], irm[0], irm[0],
-            irm[0], irm[0], prm_long[0],
-            ]
+    reinf_sequence = [irm[0]] * 8 + [prm_long[0]]
 schemas.append(_1For9Singles())
+
+class _1For27Singles(NForNSingles):
+    name = "1 for 27 singles"
+    piece_per_reinf = 1. / 9.
+    reinf_sequence = [irm[0]] * 26 + [prm_long[0]]
+schemas.append(_1For27Singles())
 
 
 class CategoricalPieces(Schema):
