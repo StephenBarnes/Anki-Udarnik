@@ -10,28 +10,26 @@ content of the food. See blog post: [Forthcoming.]
 
 ### Main module ###
 
+import re
+import math
+import datetime
 
 import aqt
 from aqt.qt import *
-from aqt import mw
+from aqt import mw, reviewer
 
 from anki.hooks import wrap, addHook
 
-from .config import *
+from .config import on_udarnik_options
 
-import re
-import math
-
-import datetime
-
-def normal_cdf(x):
+def normal_cdf(value):
     "Cdf for standard normal; don't want to import all of scipy just for this."
-    q = math.erf(x / math.sqrt(2.0))
+    q = math.erf(value / math.sqrt(2.0))
     return (1.0 + q) / 2.0
 
 
 # using only synced conf, not local preferences
-default_store = {
+DEFAULT_STORE = {
     "schema": 0,
     "version": 0.3,
     "effective calories per review": 0.8,
@@ -58,7 +56,7 @@ default_store = {
 def load_or_create_store():
     """Load and/or create stored add-on preferences annd values"""
     conf = mw.col.conf
-    default = default_store
+    default = DEFAULT_STORE
 
     if not 'udarnik' in conf:
         # create initial configuration
@@ -70,7 +68,7 @@ def load_or_create_store():
         for key in list(default.keys()):
             if key not in conf['udarnik']:
                 conf['udarnik'][key] = default[key]
-        conf['udarnik']['version'] = default_store['version']
+        conf['udarnik']['version'] = DEFAULT_STORE['version']
         # insert other update actions here:
         mw.col.setMod()
     
@@ -163,11 +161,16 @@ def reinforce_card_rating(self, ease):
     cnt = self.mw.col.sched.answerButtons(self.card)
         # this is the number of answer buttons, either 2 or 3 or 4
     if cnt == 2:
-        ease = ["fail", "normal"][ease-1]
+        ease_names = ["fail", "normal"]
     elif cnt == 3:
-        ease = ["fail", "normal", "easy"][ease-1]
+        ease_names = ["fail", "normal", "easy"]
     else: # cnt == 4
-        ease = ["fail", "difficult", "normal", "easy"][ease-1]
+        ease_names = ["fail", "difficult", "normal", "easy"]
+    if ease > len(ease_names):
+        # seems to happen because user just randomly pressed like button 4 when learning a new card
+        pass
+    else:
+        ease = ease_names[ease-1]
 
     # Compute ease multiplier
     ease_multiplier = None
@@ -226,6 +229,7 @@ def reinforce_card_rating(self, ease):
     # and if, say, number of samples is less than 25 for any distribution, we can print out its luck as "--%", ie refuse to show it
     #     because the distribution will not be approximately normal
 #TODO add a NormalVariate for a mean of recent revs, to show luck during the past 20 or so revs
+#TODO on clearing daily tallies, log them in a CSV or in Traxis
 
 
 def on_rollback():

@@ -1,0 +1,2 @@
+[MASTER]
+init-hook='import sys; sys.path.append("/home/j/Downloads/anki-2.1-source")'

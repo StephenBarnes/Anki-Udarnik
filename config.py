@@ -5,7 +5,7 @@ Configuration code for the Udarnik add-on for Anki.
 """
 
 from aqt.qt import *
-from aqt import mw, reviewer
+from aqt import mw
 
 import csv
 import os
@@ -15,25 +15,6 @@ from subprocess import call
 from .schemas import *
 
 
-# using only synced conf, not local preferences
-default_conf = {
-    "schema": 0,
-    "version": 0.0,
-    "effective calories per review": 0.8,
-    "protein free calories": 5.,
-    "difficult multiplier": .75,
-    "easy multiplier": 1.3,
-    "fail multiplier": 1,
-
-    "reinforcer": 0,
-    "reinforcer_name": "M&Ms",
-    "reinforcer_kcal_serving": 210,
-    "reinforcer_protein_serving": 2,
-    "reinforcer_pieces_serving": 49.196,
-    "ekcal_per_piece": (210 - 2 * 5) / 49.196,
-
-    "piece_prob": 0.8 / ((210 - 5 * 2) / 49.196),
-}
 
 
 # location of this file
@@ -42,32 +23,6 @@ __location__ = os.path.realpath(
 reinforcers_fname = os.path.join(__location__, "reinforcers.csv")
 reinforcers_backup_fname = os.path.join(__location__, "reinforcers.csv~")
 
-
-def load_config():
-    """Load and/or create add-on preferences"""
-    conf = mw.col.conf
-    default = default_conf
-
-    if not 'udarnik' in conf:
-        # create initial configuration
-        conf['udarnik'] = default
-        mw.col.setMod()
-
-    elif conf['udarnik']['version'] < default['version']:
-        print("Updating synced config DB from earlier add-on release")
-        for key in list(default.keys()):
-            if key not in conf['udarnik']:
-                conf['udarnik'][key] = default[key]
-        conf['udarnik']['version'] = default['udarnik']
-        # insert other update actions here:
-        mw.col.setMod()
-
-    # always overwrite with default
-    # TODO: remove this
-    #conf['udarnik'] = default
-    #mw.col.setMod()
-
-    return mw.col.conf['udarnik']
 
 
 def load_reinforcers():
