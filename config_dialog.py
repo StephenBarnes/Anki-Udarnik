@@ -96,10 +96,15 @@ class UdarnikOptions(QDialog):
                 self.config['reinforcer'] = 0
                 self.recalculate()
             widget.textEdited.connect(update_reinforcer_sel)
-
+        else:
+            def recalculate(newval):
+                self.recalculate()
+            widget.textEdited.connect(recalculate)
+            #FIXME: if you change eg 0.8 to 0.7, then when you type the 7 it says error, and when you type an extra 0 it gets computed correctly
+            # possibly this is because the widget.textEdited.connect'ed function gets called before the value has changed, rather than after?
 
     def recalculate(self):
-        schema = schemas[self.config['schema']]
+        schema = all_schemas[self.config['schema']]
         try:
             ekcal_per_serving = self.config['reinforcer_kcal_serving'] - self.config['protein free calories'] * self.config['reinforcer_protein_serving']
             ekcal_per_piece = ekcal_per_serving / self.config['reinforcer_pieces_serving']
@@ -124,7 +129,7 @@ class UdarnikOptions(QDialog):
         layout.addRow(QLabel("<b>For all reinforcers:</b>"))
 
         self.schema_sel = QComboBox()
-        self.schema_sel.addItems([schema.name for schema in schemas])
+        self.schema_sel.addItems([schema.name for schema in all_schemas])
         def update_config_schema(i):
             self.config["schema"] = i
             self.recalculate()

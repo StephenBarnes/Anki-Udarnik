@@ -8,7 +8,7 @@ from os import system
 
 #from anki.sound import play as play_sound
 
-schemas = []
+all_schemas = []
 
 
 class Schema(object):
@@ -44,6 +44,19 @@ def show_reinforcement(picture, sound, duration):
     mw.splash.show()
     mw.splash.move(*flashPosition)
     QTimer.singleShot(duration, mw.splash.close)
+
+def show_multiple_reinforcements(*reinf_tuples):
+    sounds = [tup[1] for tup in reinf_tuples]
+    mplayer_commands = ["(mplayer " + sound + " >/dev/null 2>/dev/null)" for sound in sounds]
+    command = "( " + " && ".join(mplayer_commands)  + " ) &"
+    system(command)
+    # For now, only show the first picture
+    picture = reinf_tuples[0][0]
+    mw.splash = QSplashScreen(QPixmap(picture))
+    mw.splash.move(*flashPosition)
+    mw.splash.show()
+    mw.splash.move(*flashPosition)
+    QTimer.singleShot(reinf_tuples[0][2], mw.splash.close)
 
 
 # define some reinforcement messages (rm), ie tuples of (image, sound, duration) for the various degrees of reinforcement
@@ -94,7 +107,7 @@ class _1For1(Schema):
 
     def status_output(self):
         return "(1 for 1; no state)"
-schemas.append(_1For1())
+all_schemas.append(_1For1())
 
 
 class NForNSingles(Schema):
@@ -134,7 +147,7 @@ class _4For3Singles(NForNSingles):
     name = "4 for 3 singles"
     piece_per_reinf = 4. / 3.
     reinf_sequence = [prm[0], prm[0], prm[1]]
-schemas.append(_4For3Singles())
+all_schemas.append(_4For3Singles())
 
 class _4For9Singles(NForNSingles):
     name = "4 for 9 singles"
@@ -144,7 +157,7 @@ class _4For9Singles(NForNSingles):
             irm[0], irm[0], prm[0],
             irm[0], irm[0], prm[1],
             ]
-schemas.append(_4For9Singles())
+all_schemas.append(_4For9Singles())
 
 class _13For9Singles(NForNSingles):
     name = "13 for 9 singles"
@@ -154,7 +167,7 @@ class _13For9Singles(NForNSingles):
             prm[0], prm[0], prm[1],
             prm[0], prm[0], prm[2],
             ]
-schemas.append(_13For9Singles())
+all_schemas.append(_13For9Singles())
 
 class _4For27Singles(NForNSingles):
     name = "4 for 27 singles"
@@ -172,7 +185,7 @@ class _4For27Singles(NForNSingles):
             irm[0], irm[0], irm[0],
             irm[0], irm[0], prm_long[1],
             ]
-schemas.append(_4For27Singles())
+all_schemas.append(_4For27Singles())
 
 
 class _42For27Singles(NForNSingles):
@@ -191,20 +204,20 @@ class _42For27Singles(NForNSingles):
             prm[0], prm[0], prm[2],
             prm[0], prm[0], prm[3], # cumulative 42
             ]
-schemas.append(_42For27Singles())
+all_schemas.append(_42For27Singles())
 
 
 class _1For9Singles(NForNSingles):
     name = "1 for 9 singles"
     piece_per_reinf = 1. / 9.
     reinf_sequence = [irm[0]] * 8 + [prm_long[0]]
-schemas.append(_1For9Singles())
+all_schemas.append(_1For9Singles())
 
 class _1For27Singles(NForNSingles):
     name = "1 for 27 singles"
-    piece_per_reinf = 1. / 9.
+    piece_per_reinf = 1. / 27.
     reinf_sequence = [irm[0]] * 26 + [prm_long[0]]
-schemas.append(_1For27Singles())
+all_schemas.append(_1For27Singles())
 
 
 class CategoricalPieces(Schema):
@@ -278,37 +291,37 @@ class CategoricalPieces(Schema):
 class _2For1(CategoricalPieces):
     name = "2 for 1"
     piece_probs = [(1., 2., prm[1])]
-schemas.append(_2For1())
+all_schemas.append(_2For1())
 
 class Geometric12(CategoricalPieces):
     name = "Geometric, factor 1/2"
     piece_probs = [(2**(8 - i), i+1, prm[i]) for i in range(0, 8+1)]
-schemas.append(Geometric12())
+all_schemas.append(Geometric12())
 
 class Geometric13(CategoricalPieces):
     name = "Geometric, factor 1/3"
     piece_probs = [(3**(8 - i), i+1, prm[i]) for i in range(0, 8+1)]
-schemas.append(Geometric13())
+all_schemas.append(Geometric13())
 
 class Geometric14(CategoricalPieces):
     name = "Geometric, factor 1/4"
     piece_probs = [(4**(8 - i), i+1, prm[i]) for i in range(0, 8+1)]
-schemas.append(Geometric14())
+all_schemas.append(Geometric14())
 
 class Geometric23(CategoricalPieces):
     name = "Geometric, factor 2/3"
     piece_probs = [((1.5)**(8 - i), i+1, prm[i]) for i in range(0, 8+1)]
-schemas.append(Geometric23())
+all_schemas.append(Geometric23())
 
 class Uniform1to4(CategoricalPieces):
     name = "Uniform 1-4"
     piece_probs = [(1, i, prm[i-1]) for i in range(1, 4+1)]
-schemas.append(Uniform1to4())
+all_schemas.append(Uniform1to4())
 
 class Uniform1to9(CategoricalPieces):
     name = "Uniform 1-9"
     piece_probs = [(1, i, prm[i-1]) for i in range(1, 9+1)]
-schemas.append(Uniform1to9())
+all_schemas.append(Uniform1to9())
 
 class CategoricalPartials(Schema):
     """Abstract base class for schemas that give a number of partial pieces
@@ -403,13 +416,13 @@ class Geometric2Partials9(CategoricalPartials):
     name = "2-Geometric partials, 1 for 9"
     partials_probs = [(2**(8 - i), i+1) for i in range(0, 8+1)]
     partials_per_piece = 9
-schemas.append(Geometric2Partials9())
+all_schemas.append(Geometric2Partials9())
 
 class Geometric2Partials3(CategoricalPartials):
     name = "2-Geometric partials, 1 for 3"
     partials_probs = [(2**(8 - i), i+1) for i in range(0, 8+1)]
     partials_per_piece = 3
-schemas.append(Geometric2Partials3())
+all_schemas.append(Geometric2Partials3())
 
 
 class CategoricalPartialsNForN(Schema):
@@ -497,7 +510,11 @@ class CategoricalPartialsNForN(Schema):
                 if self.state >= len(self.reinf_sequence):
                     self.state %= len(self.reinf_sequence)
                 print(">> reinforcements given! state %d, prob %.4f, %d pieces given, %d reinfs given, %d partials given, %d partials left" % (self.state, prob, num_pieces, num_reinfs, num, self.partials_curr))
-                show_reinforcement(*prm[num_pieces-1])
+                # Show pieces given, and also extra partials remaining after that
+                if not self.partials_curr:
+                    show_reinforcement(*prm[num_pieces-1])
+                else:
+                    show_multiple_reinforcements(prm[num_pieces - 1], irm[self.partials_curr - 1])
             else:
                 print(">> partial reinforcements given; state %d, prob %.4f, %d partials given, %d partials in total" % (self.state, prob, num, self.partials_curr))
                 show_reinforcement(*irm[num-1])
@@ -527,19 +544,23 @@ def make_geometricApartialsBforC(geom_factor, partials_per_reinf_2, reinf_sequen
         partials_probs = [(geom_factor**(8 - i), i+1) for i in range(0, 8+1)]
         partials_per_reinf = partials_per_reinf_2
         reinf_sequence = reinf_sequence_2
-    schemas.append(ManufacturedGeometric())
+    all_schemas.append(ManufacturedGeometric())
 
 make_geometricApartialsBforC(2, 9, [1, 1, 2])
 make_geometricApartialsBforC(2, 3, [1, 1, 2, 1, 1, 2, 1, 1, 3])
+make_geometricApartialsBforC(2, 27, [1])
 
 make_geometricApartialsBforC(1.5, 9, [1, 1, 2])
 make_geometricApartialsBforC(1.5, 3, [1, 1, 2, 1, 1, 2, 1, 1, 3])
+make_geometricApartialsBforC(1.5, 27, [1])
 
 make_geometricApartialsBforC(3, 9, [1, 1, 2])
 make_geometricApartialsBforC(3, 3, [1, 1, 2, 1, 1, 2, 1, 1, 3])
+make_geometricApartialsBforC(3, 27, [1])
 
 make_geometricApartialsBforC(4, 9, [1, 1, 2])
 make_geometricApartialsBforC(4, 3, [1, 1, 2, 1, 1, 2, 1, 1, 3])
+make_geometricApartialsBforC(4, 27, [1])
 
 
 

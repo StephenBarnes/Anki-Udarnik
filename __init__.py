@@ -20,7 +20,8 @@ from aqt import mw, reviewer
 
 from anki.hooks import wrap, addHook
 
-from .config import on_udarnik_options
+from .config_dialog import on_udarnik_options
+from .schemas import all_schemas
 
 def normal_cdf(value):
     "Cdf for standard normal; don't want to import all of scipy just for this."
@@ -168,7 +169,8 @@ def reinforce_card_rating(self, ease):
         ease_names = ["fail", "difficult", "normal", "easy"]
     if ease > len(ease_names):
         # seems to happen because user just randomly pressed like button 4 when learning a new card
-        pass
+        print("!!! Udarnik: Assuming that keypress wasn't an actual card-rating but rather just a mistake, since it doesn't seem to make sense")
+        return
     else:
         ease = ease_names[ease-1]
 
@@ -183,10 +185,10 @@ def reinforce_card_rating(self, ease):
     elif ease == "fail":
         ease_multiplier = config['fail multiplier']
     else:
-        raise Exception()
+        raise Exception("unknown ease name %s" % ease)
 
     # Tell the schema to reinforce, using this probability
-    schema = schemas[config['schema']]
+    schema = all_schemas[config['schema']]
     piece_probability = config['piece_prob'] * deck_multiplier * ease_multiplier
     #print("> piece_probability %s" % piece_probability)
     #print("> config's piece_prob %s" % config['piece_prob'])
@@ -203,19 +205,19 @@ def reinforce_card_rating(self, ease):
     ekcal_given += ekcal_given_now
     expected_ekcal_given += piece_probability * ekcal_per_piece
     variance_ekcal_given += ekcal_variance_now
-    print("This rev     :           %6.2f ekcal, %6.2f expectation, %7.2f standard deviation" \
+    print("This rev     :           %7.2f ekcal, %7.2f expectation, %8.2f standard deviation" \
             % (ekcal_given_now, expected_ekcal_given_now, ekcal_variance_now**.5))
     percentile = compute_percentile(ekcal_given, expected_ekcal_given, variance_ekcal_given)
     # Assumes that true distribution is normal, which will become true as we review more cards, by central limit theorem
-    print("This session : luck %2d%%, %6.2f ekcal, %6.2f expectation, %7.2f standard deviation" \
-            % (percentile * 100, ekcal_given, expected_ekcal_given, variance_ekcal_given**.5))
+    print("This session : luck %2d%%, %7.2f ekcal, %7.2f expectation, %8.2f standard deviation, %7.2f equivalent revs" \
+            % (percentile * 100, ekcal_given, expected_ekcal_given, variance_ekcal_given**.5, expected_ekcal_given / config["effective calories per review"]))
 
     # Update daily totals
     given_daily, expected_daily, variance_daily = update_stored_dailies(ekcal_given_now, expected_ekcal_given_now, ekcal_variance_now)
     percentile = compute_percentile(given_daily, expected_daily, variance_daily)
     # Assumes that true distribution is normal, which will become true as we review more cards, by central limit theorem
-    print("Today        : luck %2d%%, %6.2f ekcal, %6.2f expectation, %7.2f standard deviation" \
-            % (percentile *  100, given_daily, expected_daily, variance_daily**.5))
+    print("Today        : luck %2d%%, %7.2f ekcal, %7.2f expectation, %8.2f standard deviation, %7.2f equivalent revs" \
+            % (percentile *  100, given_daily, expected_daily, variance_daily**.5, expected_daily / config["effective calories per review"]))
 
     print("")
 
@@ -233,7 +235,7 @@ def reinforce_card_rating(self, ease):
 
 
 def on_rollback():
-    schema = schemas[config['schema']]
+    schema = all_schemas[config['schema']]
     schema.rollback()
 
 
