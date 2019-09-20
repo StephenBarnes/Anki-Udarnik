@@ -1,2 +1,10 @@
-name,kcal / serving,protein / serving,pieces / serving
-M&Ms,123,456,789
+name,real kcal / serving,phantom kcal / serving,vapes / serving,carbs / serving,fat / serving,protein / serving,pieces / serving
+Vape,0.0,0.0,1.0,0.0,0.0,0.0,1.0
+"Mandarin orange, Cuties",40.0,0.0,0.0,10.1,0.6,0.0,1.0
+Babybel,70.0,0.0,0.0,0.0,6.0,5.0,1.0
+"Internet timewasting, 10m",0.0,20.0,0.0,0.0,0.0,0.0,1.0
+Jello treat,10.0,25.0,0.0,0.0,0.0,1.0,1.0
+"Bacon, Oscar Meyer hardwood smoked, 1sl",45.0,0.0,0.0,0.0,3.5,3.5,1.0
+"Rye crispbread, Wasa, light, 1sl",20.0,0.0,0.0,5.5,0.0,1.0,1.0
+Bacon 4sl + Rye 4sl + 10Vapes,260.0,0.0,10.0,22.0,14.0,18.0,1.0
+Bacon 4sl + Rye 4sl + 30Vapes,260.0,0.0,30.0,22.0,14.0,18.0,1.0

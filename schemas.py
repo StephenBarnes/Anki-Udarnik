@@ -90,23 +90,31 @@ class _1For1(Schema):
     piece_per_reinf = 1
 
     def __init__(self):
-        pass
+        self.num_given = 0
 
     def card_rev(self, prob):
         reinforcing = random() < prob
         if reinforcing:
-            print(">> reinforcing! prob %.4f" % prob)
+            print(">> reinforcing! %d given, prob %.4f" % (1, prob))
+            self.num_given += 1
+            print(self.status_output())
             show_reinforcement(*prm[0])
             return (1, prob * (1 - prob))
         else:
-            print(">> not reinforcing; prob %.4f" % prob)
+            print(">> not reinforcing; %d given, prob %.4f" % (0, prob))
+            print(self.status_output())
             return (0, prob * (1 - prob))
 
     def rollback(self):
-        pass
+        self.num_given -= 1
+        print(self.status_output())
+
+    def reset(self):
+        self.num_given = 0
+        print(self.status_output())
 
     def status_output(self):
-        return "(1 for 1; no state)"
+        return "(1 for 1; no state; %s given)" % self.num_given
 all_schemas.append(_1For1())
 
 
@@ -118,15 +126,21 @@ class NForNSingles(Schema):
 
     def __init__(self):
         self.idx = 0
+        self.num_given = 0
 
     def card_rev(self, prob):
         prob /= self.piece_per_reinf
+        if prob > 1:
+            print("Probability would be greater than 1! Effective reinforcement rate is lower than specified")
+            prob = 1
         reinforcing = random() < prob
         if reinforcing:
-            show_reinforcement(*self.reinf_sequence[self.idx])
+            if self.reinf_sequence[self.idx] is not None:
+                show_reinforcement(*self.reinf_sequence[self.idx])
             self.idx += 1
             if self.idx == len(self.reinf_sequence):
                 self.idx = 0
+                self.num_given += 1
             print(">> reinforcing! prob %.4f, new state %s" % (prob, self.status_output()))
             return (self.piece_per_reinf, (self.piece_per_reinf ** 2) * prob * (1 - prob))
             # Remember Variance(aX) = a^2 Variance(X), henc the **2 above
@@ -140,8 +154,13 @@ class NForNSingles(Schema):
             self.idx = len(self.reinf_sequence) - 1
         print("Rolled back, new state idx %d" % self.idx)
 
+    def reset(self):
+        self.idx = 0
+        self.num_given = 0
+        print("Reset, new state idx %d" % self.idx)
+
     def status_output(self):
-        return "idx %d" % self.idx
+        return "idx %d; have given %d" % (self.idx, self.num_given)
 
 class _4For3Singles(NForNSingles):
     name = "4 for 3 singles"
@@ -206,18 +225,122 @@ class _42For27Singles(NForNSingles):
             ]
 all_schemas.append(_42For27Singles())
 
+for n in (3, 5, 8, 10, 12, 15, 20, 25, 30):
+    class _1ForNSingles(NForNSingles):
+        name = "1 for %d singles" % n
+        piece_per_reinf = 1. / n
+        reinf_sequence = [irm[0]] * (n-1) + [prm_long[0]]
+    all_schemas.append(_1ForNSingles())
 
-class _1For9Singles(NForNSingles):
-    name = "1 for 9 singles"
-    piece_per_reinf = 1. / 9.
-    reinf_sequence = [irm[0]] * 8 + [prm_long[0]]
-all_schemas.append(_1For9Singles())
+ordinal = lambda n: "%d%s" % (n,"tsnrhtdd"[(n//10%10!=1)*(n%10<4)*n%10::4])
 
-class _1For27Singles(NForNSingles):
-    name = "1 for 27 singles"
-    piece_per_reinf = 1. / 27.
-    reinf_sequence = [irm[0]] * 26 + [prm_long[0]]
-all_schemas.append(_1For27Singles())
+for minorgroups in (2, 3, 5, 10, 15, 20, 30):
+    for minorsevery in (1, 2, 3, 5, 7, 10, 15, 20):
+        total = minorgroups * minorsevery
+        class _1ForNMSinglesMthsMinor(NForNSingles): # useful for eg storing up 100EKcal, with 10 vapes while doing that
+            name = "1 for %d singles, every %s is a minor, %d minors total" % (total, ordinal(minorsevery), minorgroups)
+            piece_per_reinf = 1. / total
+            reinf_sequence = ([irm[0]] * (minorsevery - 1) + [prm[0]]) * (minorgroups - 1) + [irm[0]] * (minorsevery - 1) + [prm_long[8]]
+        all_schemas.append(_1ForNMSinglesMthsMinor())
+
+class _1For60Singles10MinorSilent(NForNSingles):
+    name = "1 for 60 singles, every 6th is a minor, partials silent"
+    piece_per_reinf = 1. / 60
+    reinf_sequence = ([None] * 5 + [prm[0]]) * 9 + ([None] * 5 + [prm_long[8]])
+all_schemas.append(_1For60Singles10MinorSilent())
+
+
+class SpecialVapeSturSchema10(Schema):
+    """Used to reinforce with vapes and sturs (flavored water) in 1:10 ratio.
+    Similar to '1 for 10 singles', except using different reinforcer tuples."""
+    name = "10 vapes : 1 stur"
+    piece_per_reinf = 1/3.
+    modified_prm_8 = (
+            prm[8][0],
+            prm[8][1],
+            1000)
+    reinf_sequence = [irm[0], irm[0], prm[0]] * 9 + [irm[0], irm[0], modified_prm_8]
+
+    def __init__(self):
+        self.idx = 0
+
+    def card_rev(self, prob):
+        prob /= self.piece_per_reinf
+        if prob > 1:
+            print("Probability would be greater than 1! Effective reinforcement rate is lower than specified")
+            prob = 1
+        reinforcing = random() < prob
+        if reinforcing:
+            show_reinforcement(*self.reinf_sequence[self.idx])
+            self.idx += 1
+            if self.idx == len(self.reinf_sequence):
+                self.idx = 0
+            print(">> reinforcing! prob %.4f, new state %s" % (prob, self.status_output()))
+            return (self.piece_per_reinf, (self.piece_per_reinf ** 2) * prob * (1 - prob))
+            # Remember Variance(aX) = a^2 Variance(X), henc the **2 above
+        else:
+            print(">> not reinforcing; prob %.4f, state %s" % (prob, self.status_output()))
+            return (0, (self.piece_per_reinf ** 2) * prob * (1 - prob))
+
+    def rollback(self):
+        self.idx -= 1
+        if self.idx == -1:
+            self.idx = len(self.reinf_sequence) - 1
+        print("Rolled back, new state idx %d" % self.idx)
+
+    def reset(self):
+        self.idx = 0
+        print("Reset, new state idx %d" % self.idx)
+
+    def status_output(self):
+        return "idx %d" % self.idx
+all_schemas.append(SpecialVapeSturSchema10())
+
+class SpecialVapeSturSchema15(Schema):
+    """Used to reinforce with vapes and sturs (flavored water) in 1:15 ratio.
+    Similar to '1 for 15 singles', except using different reinforcer tuples."""
+    name = "15 vapes : 1 stur"
+    piece_per_reinf = 1/3.
+    modified_prm_8 = (
+            prm[8][0],
+            prm[8][1],
+            1000)
+    reinf_sequence = [irm[0], irm[0], prm[0]] * 14 + [irm[0], irm[0], modified_prm_8]
+
+    def __init__(self):
+        self.idx = 0
+
+    def card_rev(self, prob):
+        prob /= self.piece_per_reinf
+        if prob > 1:
+            print("Probability would be greater than 1! Effective reinforcement rate is lower than specified")
+            prob = 1
+        reinforcing = random() < prob
+        if reinforcing:
+            show_reinforcement(*self.reinf_sequence[self.idx])
+            self.idx += 1
+            if self.idx == len(self.reinf_sequence):
+                self.idx = 0
+            print(">> reinforcing! prob %.4f, new state %s" % (prob, self.status_output()))
+            return (self.piece_per_reinf, (self.piece_per_reinf ** 2) * prob * (1 - prob))
+            # Remember Variance(aX) = a^2 Variance(X), henc the **2 above
+        else:
+            print(">> not reinforcing; prob %.4f, state %s" % (prob, self.status_output()))
+            return (0, (self.piece_per_reinf ** 2) * prob * (1 - prob))
+
+    def rollback(self):
+        self.idx -= 1
+        if self.idx == -1:
+            self.idx = len(self.reinf_sequence) - 1
+        print("Rolled back, new state idx %d" % self.idx)
+
+    def reset(self):
+        self.idx = 0
+        print("Reset, new state idx %d" % self.idx)
+
+    def status_output(self):
+        return "idx %d" % self.idx
+all_schemas.append(SpecialVapeSturSchema15())
 
 
 class CategoricalPieces(Schema):
@@ -243,6 +366,9 @@ class CategoricalPieces(Schema):
         for prob, num, rmx in self.piece_probs:
             self.expected_piece_per_reinf += prob * num
         print("Expected pieces per reinforcement: %.4f" % self.expected_piece_per_reinf)
+
+        self.num_given = 0
+        self.prev_num_given = None
 
         # Compute variance, as Variance(X) = E[X^2] - E[X]^2
         # compute E[X^2] first
@@ -273,25 +399,40 @@ class CategoricalPieces(Schema):
         # add squared deviation from when we don't reinforce
         variance += (1 - prob) * (expected_pieces ** 2)
 
+        self.prev_num_given = self.num_given
+
         if reinforcing:
             (prob, num, rmx) = self.sample_piece_probs()
             print(">> reinforcing! number %s" % num)
+            self.num_given += num
             show_reinforcement(*rmx)
+            print(self.status_output())
             return (num, variance)
         else:
             print(">> not reinforcing; prob %.4f, state %s" % (prob, self.status_output()))
+            print(self.status_output())
             return (0, variance)
 
     def rollback(self):
-        pass
+        if self.prev_num_given is None:
+            print("Sorry, can't roll back more than once; state: %s" % self.status_output())
+        else:
+            self.num_given -= prev_num_given
+            print("Rollback subtracts %d; state: %s" % (self.prev_num_given, self.status_output()))
+
+    def reset(self):
+        self.num_given = 0
+        self.prev_num_given = None
+        print("Reset; state: %s" %  self.status_output())
 
     def status_output(self):
-        return "(categoricalPieces, no state)"
+        return "(categoricalPieces, num given %d, previous num given %d)" % (self.num_given, (self.prev_num_given or 0))
 
-class _2For1(CategoricalPieces):
-    name = "2 for 1"
-    piece_probs = [(1., 2., prm[1])]
-all_schemas.append(_2For1())
+for n in range(2, 9+1):
+    class _NFor1(CategoricalPieces):
+        name = "%d for 1" % n
+        piece_probs = [(1., n, prm[n-1])]
+    all_schemas.append(_NFor1())
 
 class Geometric12(CategoricalPieces):
     name = "Geometric, factor 1/2"
@@ -337,6 +478,8 @@ class CategoricalPartials(Schema):
 
         self.partials_curr = 0
         self.prev_partials_given = 0
+        self.num_given = 0
+        self.partials_given = 0
 
         # normalize self.partials_probs
         assert self.partials_probs
@@ -387,13 +530,17 @@ class CategoricalPartials(Schema):
             (prob2, num) = self.sample_partials_probs()
             self.prev_partials_given = num
             self.partials_curr += num
+            self.partials_given += partials_curr
             if self.partials_curr >= self.partials_per_piece:
                 num_pieces = self.partials_curr // self.partials_per_piece
                 self.partials_curr %= self.partials_per_piece
                 print(">> piece reinforcements given! prob %.4f, %d pieces now, %d partials given, %d partials left" % (prob2, num_pieces, num, self.partials_curr))
+                self.num_given += num_pieces
+                print("state: %s" % self.status_output())
                 show_reinforcement(*prm[num_pieces-1])
             else:
                 print(">> partial reinforcements given; prob %.4f, %d partials given, %d partials in total" % (prob2, num, self.partials_curr))
+                print("state: %s" % self.status_output())
                 show_reinforcement(*irm[num-1])
             return (num / self.partials_per_piece, variance)
         else:
@@ -403,14 +550,24 @@ class CategoricalPartials(Schema):
 
     def rollback(self):
         if self.prev_partials_given is None:
-            print("CategoricalPieces can't roll back more than once") #TODO
+            print("CategoricalPieces can't roll back more than once; state: %s" % self.status_output())
+                #TODO let it roll back more than once
         else:
             self.partials_curr -= self.prev_partials_given
+            self.partials_given -= self.prev_partials_given
             self.prev_partials_given = None
-            print("CategoricalPieces rolled back, %d partials now" % self.partials_curr)
+            print("CategoricalPieces rolled back, %d partials now; state: %s" % (self.partials_curr, self.status_output()))
+
+    def reset(self):
+        self.partials_curr = 0
+        self.prev_partials_given = None
+        self.num_given = 0
+        self.partials_given = 0
+        print("Rollback; state: %s" % self.status_output())
 
     def status_output(self):
-        return "(categorical partials, %d partials currently)" % self.partials_curr
+        return "(categorical partials, %d partials currently, given %d full and %d partials)" % \
+                (self.partials_curr, self.num_given, self.partials_given)
 
 class Geometric2Partials9(CategoricalPartials):
     name = "2-Geometric partials, 1 for 9"
@@ -534,6 +691,12 @@ class CategoricalPartialsNForN(Schema):
         else:
             self.partials_curr -= 1
         print("%s rolled back, state %d, partials %d" % (self.name, self.state, self.partials_curr))
+
+    def reset(self):
+        # TODO haven't fully implemented state-tracking and reset etc. for this schema, because I never use it
+        self.state = 0
+        self.partials_curr = 0
+        self.prev_partials_given = 0
 
     def status_output(self):
         return "(categorical partials, %d partials currently, state %d)" % (self.partials_curr, self.state)

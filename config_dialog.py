@@ -28,7 +28,13 @@ reinforcers_backup_fname = os.path.join(__location__, "reinforcers.csv~")
 def load_reinforcers():
     """Load reinforcers from reinforcers.csv file."""
     result = [] # list of OrderedDicts, each describing one reinforcer
-    expected_field_names = ['name', 'kcal / serving', 'protein / serving', 'pieces / serving']
+    expected_field_names = ['name', 'real kcal / serving',
+            'phantom kcal / serving',
+            'vapes / serving',
+            'carbs / serving',
+            'fat / serving',
+            'protein / serving',
+            'pieces / serving']
     with open(reinforcers_fname, "r") as reinforcers_file:
         reader = csv.DictReader(reinforcers_file)
         assert reader.fieldnames == expected_field_names, ("Unexpected fieldnames in reinforcers.csv. " + \
@@ -63,10 +69,14 @@ class UdarnikOptions(QDialog):
         schema_idx = self.config["schema"]
         self.schema_sel.setCurrentIndex(schema_idx)
         self.ekcal_rev_input.setText(str(self.config["effective calories per review"]))
-        self.protein_free_input.setText(str(self.config["protein free calories"]))
         self.difficult_mult_input.setText(str(self.config["difficult multiplier"]))
         self.easy_mult_input.setText(str(self.config["easy multiplier"]))
         self.fail_mult_input.setText(str(self.config["fail multiplier"]))
+
+        self.protein_cost.setText(str(self.config["protein cost"]))
+        self.carbs_cost.setText(str(self.config["carbs cost"]))
+        self.fat_cost.setText(str(self.config["fat cost"]))
+        self.vape_cost.setText(str(self.config["vape cost"]))
 
         reinforcer_idx = self.config["reinforcer"]
         reinforcer_names = [(reinforcer['name'] if reinforcer is not None else "(select saved reinforcer to load)")
@@ -74,7 +84,11 @@ class UdarnikOptions(QDialog):
         self.reinforcer_sel.addItems(reinforcer_names)
         self.reinforcer_sel.setCurrentIndex(reinforcer_idx)
         self.name_input.setText(none_to_empty(self.config['reinforcer_name']))
-        self.kcal_serving_input.setText(none_to_empty(self.config['reinforcer_kcal_serving']))
+        self.real_kcal_serving_input.setText(none_to_empty(self.config['reinforcer_real_kcal_serving']))
+        self.phantom_kcal_serving_input.setText(none_to_empty(self.config['reinforcer_phantom_kcal_serving']))
+        self.vapes_serving_input.setText(none_to_empty(self.config['reinforcer_vapes_serving']))
+        self.carbs_serving_input.setText(none_to_empty(self.config['reinforcer_carbs_serving']))
+        self.fat_serving_input.setText(none_to_empty(self.config['reinforcer_fat_serving']))
         self.protein_serving_input.setText(none_to_empty(self.config['reinforcer_protein_serving']))
         self.pieces_serving_input.setText(none_to_empty(self.config['reinforcer_pieces_serving']))
 
@@ -106,7 +120,13 @@ class UdarnikOptions(QDialog):
     def recalculate(self):
         schema = all_schemas[self.config['schema']]
         try:
-            ekcal_per_serving = self.config['reinforcer_kcal_serving'] - self.config['protein free calories'] * self.config['reinforcer_protein_serving']
+            ekcal_per_serving = (
+                    self.config['reinforcer_phantom_kcal_serving']
+                    + self.config['reinforcer_vapes_serving'] * self.config['vape cost']
+                    + self.config['reinforcer_carbs_serving'] * self.config['carbs cost']
+                    + self.config['reinforcer_fat_serving'] * self.config['fat cost']
+                    + self.config['reinforcer_protein_serving'] * self.config['protein cost']
+                    )
             ekcal_per_piece = ekcal_per_serving / self.config['reinforcer_pieces_serving']
             piece_per_rev = self.config['effective calories per review'] / ekcal_per_piece 
             self.config['ekcal_per_piece'] = ekcal_per_piece
@@ -114,6 +134,14 @@ class UdarnikOptions(QDialog):
             self.piece_prob_readout.setText('%.3f' % piece_per_rev)
             self.piece_cards_readout.setText('%.3f' % (1. / piece_per_rev))
             self.config['piece_prob'] = piece_per_rev
+
+            self.config['real_kcal_per_piece'] = self.config['reinforcer_real_kcal_serving'] / self.config['reinforcer_pieces_serving']
+            self.config['phantom_kcal_per_piece'] = self.config['reinforcer_phantom_kcal_serving'] / self.config['reinforcer_pieces_serving']
+            self.config['vapes_per_piece'] = self.config['reinforcer_vapes_serving'] / self.config['reinforcer_pieces_serving']
+            self.config['carbs_per_piece'] = self.config['reinforcer_carbs_serving'] / self.config['reinforcer_pieces_serving']
+            self.config['fat_per_piece'] = self.config['reinforcer_fat_serving'] / self.config['reinforcer_pieces_serving']
+            self.config['protein_per_piece'] = self.config['reinforcer_protein_serving'] / self.config['reinforcer_pieces_serving']
+
         except ZeroDivisionError:
             self.config['ekcal_per_piece'] = 0.
             self.calories_item_readout.setText('(error)')
@@ -141,11 +169,6 @@ class UdarnikOptions(QDialog):
         self.line_edit_updated(self.ekcal_rev_input, "effective calories per review")
         layout.addRow(QLabel("Effective kcal / rev"), self.ekcal_rev_input)
 
-        self.protein_free_input = QLineEdit()
-        self.protein_free_input.setValidator(QDoubleValidator())
-        self.line_edit_updated(self.protein_free_input, "protein free calories")
-        layout.addRow(QLabel("Free kcal / g protein"), self.protein_free_input)
-
         difficult_mult_l = QLabel("\"Difficult\" multiplier")
         self.difficult_mult_input = QLineEdit()
         self.difficult_mult_input.setValidator(QDoubleValidator())
@@ -164,6 +187,27 @@ class UdarnikOptions(QDialog):
         self.line_edit_updated(self.fail_mult_input, "fail multiplier")
         layout.addRow(QLabel("\"Fail\" multiplier"), self.fail_mult_input)
 
+        self.protein_cost = QLineEdit()
+        self.protein_cost.setValidator(QDoubleValidator())
+        self.line_edit_updated(self.protein_cost, "protein cost")
+        layout.addRow(QLabel("Cost per g protein"), self.protein_cost)
+
+        self.carbs_cost = QLineEdit()
+        self.carbs_cost.setValidator(QDoubleValidator())
+        self.line_edit_updated(self.carbs_cost, "carbs cost")
+        layout.addRow(QLabel("Cost per g carbs"), self.carbs_cost)
+
+        self.fat_cost = QLineEdit()
+        self.fat_cost.setValidator(QDoubleValidator())
+        self.line_edit_updated(self.fat_cost, "fat cost")
+        layout.addRow(QLabel("Cost per g fat"), self.fat_cost)
+
+        self.vape_cost = QLineEdit()
+        self.vape_cost.setValidator(QDoubleValidator())
+        self.line_edit_updated(self.vape_cost, "vape cost")
+        layout.addRow(QLabel("Cost per vape"), self.vape_cost)
+
+
         self.restore_defaults_button = QPushButton("&Restore defaults")
         self.restore_defaults_button.clicked.connect(self.restore_defaults)
         layout.addRow(self.restore_defaults_button)
@@ -178,15 +222,35 @@ class UdarnikOptions(QDialog):
         self.reinforcer_sel.activated.connect(self.reinforcer_selected)
         layout.addRow(QLabel("Load:"), self.reinforcer_sel)
 
-        self.kcal_serving_input = QLineEdit()
-        self.kcal_serving_input.setValidator(QDoubleValidator())
-        self.line_edit_updated(self.kcal_serving_input, "reinforcer_kcal_serving", reinforcer=True)
-        layout.addRow(QLabel("Kcal / serving"), self.kcal_serving_input)
+        self.real_kcal_serving_input = QLineEdit()
+        self.real_kcal_serving_input.setValidator(QDoubleValidator())
+        self.line_edit_updated(self.real_kcal_serving_input, "reinforcer_real_kcal_serving", reinforcer=True)
+        layout.addRow(QLabel("Real kcal / serving"), self.real_kcal_serving_input)
+
+        self.phantom_kcal_serving_input = QLineEdit()
+        self.phantom_kcal_serving_input.setValidator(QDoubleValidator())
+        self.line_edit_updated(self.phantom_kcal_serving_input, "reinforcer_phantom_kcal_serving", reinforcer=True)
+        layout.addRow(QLabel("Phantom kcal / serving"), self.phantom_kcal_serving_input)
+
+        self.vapes_serving_input = QLineEdit()
+        self.vapes_serving_input.setValidator(QDoubleValidator())
+        self.line_edit_updated(self.vapes_serving_input, "reinforcer_vapes_serving", reinforcer=True)
+        layout.addRow(QLabel("Vapes / serving"), self.vapes_serving_input)
+
+        self.carbs_serving_input = QLineEdit()
+        self.carbs_serving_input.setValidator(QDoubleValidator())
+        self.line_edit_updated(self.carbs_serving_input, "reinforcer_carbs_serving", reinforcer=True)
+        layout.addRow(QLabel("Carbs g / serving"), self.carbs_serving_input)
+
+        self.fat_serving_input = QLineEdit()
+        self.fat_serving_input.setValidator(QDoubleValidator())
+        self.line_edit_updated(self.fat_serving_input, "reinforcer_fat_serving", reinforcer=True)
+        layout.addRow(QLabel("Fat g / serving"), self.fat_serving_input)
 
         self.protein_serving_input = QLineEdit()
         self.protein_serving_input.setValidator(QDoubleValidator())
         self.line_edit_updated(self.protein_serving_input, "reinforcer_protein_serving", reinforcer=True)
-        layout.addRow(QLabel("Protein / serving"), self.protein_serving_input)
+        layout.addRow(QLabel("Protein g / serving"), self.protein_serving_input)
 
         self.pieces_serving_input = QLineEdit()
         self.pieces_serving_input.setValidator(QDoubleValidator())
@@ -261,15 +325,27 @@ class UdarnikOptions(QDialog):
     def reinforcer_selected(self, idx):
         self.config['reinforcer'] = idx
         reinforcer = self.reinforcers[idx]
+
         if reinforcer is not None:
-            self.kcal_serving_input.setText(str(reinforcer['kcal / serving']))
+
+            self.real_kcal_serving_input.setText(str(reinforcer['real kcal / serving']))
+            self.phantom_kcal_serving_input.setText(str(reinforcer['phantom kcal / serving']))
+            self.vapes_serving_input.setText(str(reinforcer['vapes / serving']))
+            self.carbs_serving_input.setText(str(reinforcer['carbs / serving']))
+            self.fat_serving_input.setText(str(reinforcer['fat / serving']))
             self.protein_serving_input.setText(str(reinforcer['protein / serving']))
             self.pieces_serving_input.setText(str(reinforcer['pieces / serving']))
             self.name_input.setText(reinforcer['name'])
-            self.config["reinforcer_kcal_serving"] = reinforcer['kcal / serving']
+
+            self.config["reinforcer_real_kcal_serving"] = reinforcer['real kcal / serving']
+            self.config["reinforcer_phantom_kcal_serving"] = reinforcer['phantom kcal / serving']
+            self.config["reinforcer_vapes_serving"] = reinforcer['vapes / serving']
+            self.config["reinforcer_carbs_serving"] = reinforcer['carbs / serving']
+            self.config["reinforcer_fat_serving"] = reinforcer['fat / serving']
             self.config["reinforcer_protein_serving"] = reinforcer['protein / serving']
             self.config["reinforcer_pieces_serving"] = reinforcer['pieces / serving']
             self.config["reinforcer_name"] = reinforcer['name']
+
         self.recalculate()
 
     def delete_reinforcer(self):
@@ -294,7 +370,11 @@ class UdarnikOptions(QDialog):
         new_reinforcer = OrderedDict()
         new_reinforcer['name'] = self.name_input.text()
         # TODO wrap these float() calls in a try-except block
-        new_reinforcer['kcal / serving'] = float(self.kcal_serving_input.text())
+        new_reinforcer['real kcal / serving'] = float(self.real_kcal_serving_input.text())
+        new_reinforcer['phantom kcal / serving'] = float(self.phantom_kcal_serving_input.text())
+        new_reinforcer['vapes / serving'] = float(self.vapes_serving_input.text())
+        new_reinforcer['carbs / serving'] = float(self.carbs_serving_input.text())
+        new_reinforcer['fat / serving'] = float(self.fat_serving_input.text())
         new_reinforcer['protein / serving'] = float(self.protein_serving_input.text())
         new_reinforcer['pieces / serving'] = float(self.pieces_serving_input.text())
         if None in new_reinforcer.values():
@@ -322,7 +402,13 @@ class UdarnikOptions(QDialog):
         if self.reinforcers_csv_change:
             call(['cp', reinforcers_fname, reinforcers_backup_fname])
             with open(reinforcers_fname, "w") as reinforcers_file:
-                expected_field_names = ['name', 'kcal / serving', 'protein / serving', 'pieces / serving']
+                expected_field_names = ['name', 'real kcal / serving',
+                        'phantom kcal / serving',
+                        'vapes / serving',
+                        'carbs / serving',
+                        'fat / serving',
+                        'protein / serving',
+                        'pieces / serving']
                 writer = csv.DictWriter(reinforcers_file, expected_field_names)
                 writer.writeheader()
                 writer.writerows(self.reinforcers[1:]) # the [1:] is to not write out the None
