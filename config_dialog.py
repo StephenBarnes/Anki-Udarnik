@@ -349,6 +349,7 @@ class UdarnikOptions(QDialog):
             self.pieces_serving_input.setText(str(reinforcer['pieces / serving']))
             self.name_input.setText(reinforcer['name'])
             self.schema_sel.setCurrentIndex(reinforcer['default schema'])
+            self.config["schema"] = reinforcer['default schema']
 
             self.config["reinforcer_real_kcal_serving"] = reinforcer['real kcal / serving']
             self.config["reinforcer_phantom_kcal_serving"] = reinforcer['phantom kcal / serving']
