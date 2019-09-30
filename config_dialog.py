@@ -34,14 +34,19 @@ def load_reinforcers():
             'carbs / serving',
             'fat / serving',
             'protein / serving',
-            'pieces / serving']
+            'pieces / serving',
+            'default schema']
     with open(reinforcers_fname, "r") as reinforcers_file:
         reader = csv.DictReader(reinforcers_file)
         assert reader.fieldnames == expected_field_names, ("Unexpected fieldnames in reinforcers.csv. " + \
                 ("Expected: %s. Actual: %s." % (expected_field_names, reader.fieldnames)))
         for reinforcer in reader:
             for k, v in reinforcer.items():
-                if k != 'name':
+                if k == 'name':
+                    reinforcer[k] = v
+                elif k == 'default schema':
+                    reinforcer[k] = int(v)
+                else:
                     reinforcer[k] = float(v)
             result.append(reinforcer)
     return [None] + result
@@ -156,11 +161,18 @@ class UdarnikOptions(QDialog):
 
         layout.addRow(QLabel("<b>For all reinforcers:</b>"))
 
-        self.schema_sel = QComboBox()
-        self.schema_sel.addItems([schema.name for schema in all_schemas])
         def update_config_schema(i):
             self.config["schema"] = i
+
+            reinforcer_selected = self.reinforcer_sel.currentIndex()
+            if i != self.reinforcers[reinforcer_selected]['default schema']:
+                self.reinforcers[reinforcer_selected]['default schema'] = i
+                self.reinforcers_csv_change = True
+
             self.recalculate()
+
+        self.schema_sel = QComboBox()
+        self.schema_sel.addItems([schema.name for schema in all_schemas])
         self.schema_sel.activated.connect(update_config_schema)
         layout.addRow(QLabel("Schema"), self.schema_sel)
 
@@ -336,6 +348,7 @@ class UdarnikOptions(QDialog):
             self.protein_serving_input.setText(str(reinforcer['protein / serving']))
             self.pieces_serving_input.setText(str(reinforcer['pieces / serving']))
             self.name_input.setText(reinforcer['name'])
+            self.schema_sel.setCurrentIndex(reinforcer['default schema'])
 
             self.config["reinforcer_real_kcal_serving"] = reinforcer['real kcal / serving']
             self.config["reinforcer_phantom_kcal_serving"] = reinforcer['phantom kcal / serving']
@@ -345,6 +358,7 @@ class UdarnikOptions(QDialog):
             self.config["reinforcer_protein_serving"] = reinforcer['protein / serving']
             self.config["reinforcer_pieces_serving"] = reinforcer['pieces / serving']
             self.config["reinforcer_name"] = reinforcer['name']
+            self.config["reinforcer_default_schema"] = reinforcer['default schema']
 
         self.recalculate()
 
@@ -377,6 +391,7 @@ class UdarnikOptions(QDialog):
         new_reinforcer['fat / serving'] = float(self.fat_serving_input.text())
         new_reinforcer['protein / serving'] = float(self.protein_serving_input.text())
         new_reinforcer['pieces / serving'] = float(self.pieces_serving_input.text())
+        new_reinforcer['default schema'] = self.schema_sel.currentIndex()
         if None in new_reinforcer.values():
             raise Exception("form not filled out")
         modified_index = None
@@ -398,6 +413,12 @@ class UdarnikOptions(QDialog):
 
     def save_options(self):
         """Apply changes on OK button press"""
+        schema_idx_selected = self.schema_sel.currentIndex()
+        reinforcer_selected = self.reinforcer_sel.currentIndex()
+        if schema_idx_selected != self.reinforcers[reinforcer_selected]['default schema']:
+            self.reinforcers[reinforcer_selected]['default schema'] = schema_idx_selected
+            self.reinforcers_csv_change = True
+
         # Write out reinforcers to CSV file
         if self.reinforcers_csv_change:
             call(['cp', reinforcers_fname, reinforcers_backup_fname])
@@ -408,7 +429,8 @@ class UdarnikOptions(QDialog):
                         'carbs / serving',
                         'fat / serving',
                         'protein / serving',
-                        'pieces / serving']
+                        'pieces / serving',
+                        'default schema']
                 writer = csv.DictWriter(reinforcers_file, expected_field_names)
                 writer.writeheader()
                 writer.writerows(self.reinforcers[1:]) # the [1:] is to not write out the None
